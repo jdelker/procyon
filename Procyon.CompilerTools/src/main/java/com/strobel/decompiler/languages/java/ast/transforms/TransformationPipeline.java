@@ -68,7 +68,10 @@ public final class TransformationPipeline {
             new AddStandardAnnotationsTransform(context),
             new AddReferenceQualifiersTransform(context),
             new RemoveHiddenMembersTransform(context),
-            new CollapseImportsTransform(context)
+            new CollapseImportsTransform(context),
+            new RemoveAspectjWeaveTransform(context),
+            new RemoveRedundantBlocksTransform(context),
+            new AssimilateStaticFieldsTransform(context)
         };
     }
 
