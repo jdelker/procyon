@@ -38,6 +38,7 @@ import com.strobel.decompiler.languages.java.JavaOutputVisitor;
 import com.strobel.decompiler.languages.java.ast.transforms.IAstTransform;
 import com.strobel.decompiler.languages.java.ast.transforms.TransformationPipeline;
 import com.strobel.util.ContractUtils;
+import com.strobel.decompiler.utilities.LineSorter;
 
 import javax.lang.model.element.Modifier;
 import java.lang.ref.Reference;
@@ -544,74 +545,80 @@ public final class AstBuilder {
             astType.addChild(createField(field), Roles.TYPE_MEMBER);
         }
 
-        for (final MethodDefinition method : type.getDeclaredMethods()) {
-            if (method.isConstructor()) {
-                astType.addChild(createConstructor(method), Roles.TYPE_MEMBER);
+        final LineSorter lineSorter = new LineSorter();
+
+        // put all methods into line sorter
+        for (final MethodDefinition def : type.getDeclaredMethods()) {
+            lineSorter.add(def);
             }
-            else {
-                astType.addChild(createMethod(method), Roles.TYPE_MEMBER);
-            }
+        // put all types into line sorter
+        for (final TypeDefinition def : type.getDeclaredTypes()) {
+            lineSorter.add(def);
         }
 
-        final List<TypeDefinition> nestedTypes = new ArrayList<>();
+        // now add everything in the right order into the AST
+        for (MemberReference ref : lineSorter.getList()) {
 
-        for (final TypeDefinition nestedType : type.getDeclaredTypes()) {
+            if (ref instanceof MethodDefinition) {
+                MethodDefinition method = (MethodDefinition) ref;
+
+                if (method.isConstructor()) {
+                    astType.addChild(createConstructor(method), Roles.TYPE_MEMBER);
+                } else {
+                    astType.addChild(createMethod(method), Roles.TYPE_MEMBER);
+                }
+            } else if (ref instanceof TypeDefinition) {
+                TypeDefinition nestedType = (TypeDefinition) ref;
             final TypeReference declaringType = nestedType.getDeclaringType();
 
-            if (!nestedType.isLocalClass() &&
-                type.isEquivalentTo(declaringType)) {
+                if (!nestedType.isLocalClass()
+                        && type.isEquivalentTo(declaringType)) {
 
                 if (nestedType.isAnonymous()) {
                     _typeDeclarations.put(type.getInternalName(), new SoftReference<>(astType));
-                }
-                else {
-                    nestedTypes.add(nestedType);
-                }
-            }
-        }
-
-        sortNestedTypes(nestedTypes);
-
-        for (final TypeDefinition nestedType : nestedTypes) {
+                    } else {
             astType.addChild(createTypeNoCache(nestedType), Roles.TYPE_MEMBER);
         }
     }
-
-    private static void sortNestedTypes(final List<TypeDefinition> types) {
-        final IdentityHashMap<TypeDefinition, Integer> minOffsets = new IdentityHashMap<>();
-
-        for (final TypeDefinition type : types) {
-            minOffsets.put(type, findFirstLineNumber(type));
         }
-
-        Collections.sort(
-            types,
-            new Comparator<TypeDefinition>() {
-                @Override
-                public int compare(final TypeDefinition o1, final TypeDefinition o2) {
-                    return Integer.compare(minOffsets.get(o1), minOffsets.get(o2));
                 }
             }
-        );
-    }
 
-    private static Integer findFirstLineNumber(final TypeDefinition type) {
-        int minLineNumber = Integer.MAX_VALUE;
+//    private static void sortNestedTypes(final List<TypeDefinition> types) {
+//        final IdentityHashMap<TypeDefinition, Integer> minOffsets = new IdentityHashMap<>();
+//
+//        for (final TypeDefinition type : types) {
+//            minOffsets.put(type, findFirstLineNumber(type));
+//        }
+//
+//        Collections.sort(
+//                types,
+//                new Comparator<TypeDefinition>() {
+//            @Override
+//            public int compare(final TypeDefinition o1, final TypeDefinition o2) {
+//                return Integer.compare(minOffsets.get(o1), minOffsets.get(o2));
+//            }
+//        }
+//        );
+//    }
 
-        for (final MethodDefinition method : type.getDeclaredMethods()) {
-            final LineNumberTableAttribute attribute = SourceAttribute.find(AttributeNames.LineNumberTable, method.getSourceAttributes());
-
-            if (attribute != null && !attribute.getEntries().isEmpty()) {
-                final int firstLineNumber = attribute.getEntries().get(0).getLineNumber();
-
-                if (firstLineNumber < minLineNumber) {
-                    minLineNumber = firstLineNumber;
-                }
-            }
-        }
-
-        return minLineNumber;
-    }
+//    private static Integer findFirstLineNumber(final TypeDefinition type) {
+//        int minLineNumber = Integer.MAX_VALUE;
+//
+//        for (final MethodDefinition method : type.getDeclaredMethods()) {
+//            final LineNumberTableAttribute attribute = SourceAttribute.find(AttributeNames.LineNumberTable, method.getSourceAttributes());
+//
+//            if (attribute != null && !attribute.getEntries().isEmpty()) {
+//                final int firstLineNumber = attribute.getEntries().get(0).getLineNumber();
+//
+//                if (firstLineNumber < minLineNumber) {
+//                    minLineNumber = firstLineNumber;
+//                }
+//            }
+//        }
+//
+//        return minLineNumber;
+//    }
 
     private FieldDeclaration createField(final FieldDefinition field) {
         final FieldDeclaration astField = new FieldDeclaration();
