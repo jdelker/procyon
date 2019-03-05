@@ -96,6 +96,7 @@ public class DecompilerDriver {
         settings.setSimplifyMemberReferences(options.getSimplifyMemberReferences());
         settings.setForceFullyQualifiedReferences(options.getForceFullyQualifiedReferences());
         settings.setDisableForEachTransforms(options.getDisableForEachTransforms());
+        settings.setRemoveAspectJ(options.getRemoveAspectj());
         settings.setTypeLoader(new InputTypeLoader());
 
         if (!options.getSuppressBanner()) {
@@ -298,8 +299,11 @@ public class DecompilerDriver {
         }
 
         DeobfuscationUtilities.processType(resolvedType);
-        AspectJUnweaveUtilities.processType(resolvedType);
-
+        
+        if (commandLineOptions.getRemoveAspectj()) {
+            AspectJUnweaveUtilities.processType(resolvedType);
+        }
+        
         if (!includeNested && (resolvedType.isNested() || resolvedType.isAnonymous() || resolvedType.isSynthetic())) {
             return;
         }

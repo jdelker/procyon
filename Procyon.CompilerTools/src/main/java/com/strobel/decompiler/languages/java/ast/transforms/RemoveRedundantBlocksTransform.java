@@ -22,9 +22,11 @@ import java.util.logging.Logger;
 public class RemoveRedundantBlocksTransform extends ContextTrackingVisitor<Void> {
 
   private final static Logger LOG = Logger.getLogger(RemoveRedundantBlocksTransform.class.getSimpleName());
+  private final boolean _removeAspectj;
 
   public RemoveRedundantBlocksTransform(final DecompilerContext context) {
     super(context);
+    _removeAspectj = context.getSettings().getRemoveAspectJ();
   }
 
   /*
@@ -32,16 +34,18 @@ public class RemoveRedundantBlocksTransform extends ContextTrackingVisitor<Void>
    */
   @Override
   public Void visitBlockStatement(final BlockStatement node, final Void data) {
-    AstNode child = node.getFirstChild();
-    if (child != null && child.equals(node.getLastChild()) && child instanceof BlockStatement) {
-      node.replaceWith(child);
-    }
-    
-    if (!node.hasChildren() && node.getParent() instanceof BlockStatement) {
-      node.remove();
-      return null;
+    if (_removeAspectj) {
+      AstNode child = node.getFirstChild();
+      if (child != null && child.equals(node.getLastChild()) && child instanceof BlockStatement) {
+        node.replaceWith(child);
+      }
+
+      if (!node.hasChildren() && node.getParent() instanceof BlockStatement) {
+        node.remove();
+        return null;
+      }
     }
     return super.visitBlockStatement(node, data);
   }
-
+  
 }

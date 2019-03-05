@@ -18,25 +18,27 @@ package com.strobel.decompiler.languages.java.ast.transforms;
 import com.strobel.assembler.metadata.FieldDefinition;
 import com.strobel.assembler.metadata.MethodBodyParseException;
 import com.strobel.assembler.metadata.MethodDefinition;
-import com.strobel.core.StringUtilities;
 import com.strobel.decompiler.DecompilerContext;
 import com.strobel.decompiler.languages.java.ast.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   private final static Logger LOG = Logger.getLogger(RemoveAspectjWeaveTransform.class.getSimpleName());
+  private final boolean _removeAspectj;
 
   private String _ajcReturnVariable = null;
 
   public RemoveAspectjWeaveTransform(final DecompilerContext context) {
     super(context);
+    _removeAspectj = context.getSettings().getRemoveAspectJ();
   }
 
   @Override
   public Void visitFieldDeclaration(final FieldDeclaration node, final Void data) {
     final FieldDefinition field = node.getUserData(Keys.FIELD_DEFINITION);
-    if (field.getName().startsWith("ajc$")) {
+    if (_removeAspectj && field.getName().startsWith("ajc$")) {
       node.remove();
       return null;
     }
@@ -45,7 +47,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   @Override
   public Void visitVariableDeclaration(final VariableDeclarationStatement node, final Void p) {
-    if (node.getText().startsWith("final JoinPoint jp = ")) {
+    if (_removeAspectj && node.getText().startsWith("final JoinPoint jp = ")) {
       node.remove();
       return null;
     }
@@ -57,7 +59,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   public Void visitMethodDeclaration(final MethodDeclaration node, final Void p) {
     final MethodDefinition method = node.getUserData(Keys.METHOD_DEFINITION);
     String methodName = method.getName();
-    if (methodName != null && methodName.matches("ajc\\$.*")) {
+    if (_removeAspectj && methodName != null && methodName.matches("ajc\\$.*")) {
       node.remove();
       return null;
     }
@@ -67,35 +69,37 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   @Override
   public Void visitExpressionStatement(final ExpressionStatement node, final Void data) {
-
-    String text = node.getText();
-    try {
-      if (text.matches("ajc\\$.*trace\\w*Entry(.*);\n")
-              || text.matches("ajc\\$.*initLogger.*\n")
-              || text.matches("ajc\\$tjp_\\d+ = .*\n")
-              || text.matches("\\w+\\.ajc\\$.*createAspectInstance.*\n")) {
-        node.remove();
-        return null;
-      } else if (text.matches("ajc\\$.*trace\\w+Exit(.*);\n")) {
-        // handle method returns
-        handleReturn(node);
-        return null;
+    if (_removeAspectj) {
+      String text = node.getText();
+      try {
+        if (text.matches("ajc\\$.*trace\\w*Entry(.*);\n")
+                || text.matches("ajc\\$.*initLogger.*\n")
+                || text.matches("ajc\\$tjp_\\d+ = .*\n")
+                || text.matches("\\w+\\.ajc\\$.*createAspectInstance.*\n")) {
+          node.remove();
+          return null;
+        } else if (text.matches("ajc\\$.*trace\\w+Exit(.*);\n")) {
+          // handle method returns
+          handleReturn(node);
+          return null;
+        }
+      } catch (Exception ex) {
+        throw new RuntimeException("failed to process '" + text + "'", ex);
       }
-    } catch (Exception ex) {
-      throw new RuntimeException("failed to process '" + text + "'", ex);
     }
     return super.visitExpressionStatement(node, data);
   }
 
   @Override
   public Void visitTryCatchStatement(final TryCatchStatement node, final Void data) {
-
-    // check if it is a aspectJ try/catch block
-    BlockStatement tryBlock = node.getTryBlock();
-    AstNode firstChild = tryBlock.getFirstChild();
-    if (firstChild.getText().startsWith("ajc$")) {
-      node.replaceWith(tryBlock);
-      return super.visitBlockStatement(tryBlock, data);
+    if (_removeAspectj) {
+      // check if it is a aspectJ try/catch block
+      BlockStatement tryBlock = node.getTryBlock();
+      AstNode firstChild = tryBlock.getFirstChild();
+      if (firstChild.getText().startsWith("ajc$")) {
+        node.replaceWith(tryBlock);
+        return super.visitBlockStatement(tryBlock, data);
+      }
     }
     return super.visitTryCatchStatement(node, data);
   }
@@ -104,7 +108,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   public Void visitBlockStatement(final BlockStatement node, final Void data) {
     // look for clinit
     AstNode first = node.getFirstChild();
-    if (first instanceof ExpressionStatement && first.getText().matches("ajc\\$preClinit.*\n")) {
+    if (_removeAspectj && first instanceof ExpressionStatement && first.getText().matches("ajc\\$preClinit.*\n")) {
       handleClinitBlock(node);
     }
     return visitChildren(node, data);
@@ -130,7 +134,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   @Override
   public Void visitImportDeclaration(final ImportDeclaration node, final Void data) {
     // remove org.aspectj imports
-    if (node.getImport().contains("org.aspectj")) {
+    if (_removeAspectj && node.getImport().contains("org.aspectj")) {
       node.remove();
       return null;
     }
@@ -383,7 +387,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
    * stuff.
    */
   private void transformReturn(ExpressionStatement node, IdentifierExpression identExp) {
-    LOG.warning("found odd situation in " + node);
+    LOG.log(Level.WARNING, "found odd situation in {0}", node);
     node.remove();
   }
 

@@ -32,7 +32,6 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
 
   private Map<String, FieldDeclaration> _valueFields = new LinkedHashMap<>();
   private Map<String, ObjectCreationExpression> _valueInitializers = new LinkedHashMap<>();
-  private boolean _inClinit;
 
   public AssimilateStaticFieldsTransform(final DecompilerContext context) {
     super(context);

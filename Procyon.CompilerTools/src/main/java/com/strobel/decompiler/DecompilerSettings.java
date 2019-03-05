@@ -45,6 +45,7 @@ public class DecompilerSettings {
     private String _outputDirectory;
     private boolean _showDebugLineNumbers;
     private boolean _simplifyMemberReferences;
+    private boolean _removeAspectJ;
 
     public DecompilerSettings() {
     }
@@ -226,4 +227,14 @@ public class DecompilerSettings {
         settings.setJavaFormattingOptions(JavaFormattingOptions.createDefault());
         return settings;
     }
+
+    public boolean getRemoveAspectJ() {
+        return _removeAspectJ;
+    }
+  
+    public void setRemoveAspectJ(boolean removeAspectJ) {
+        _removeAspectJ = removeAspectJ;
+    }
+    
+    
 }
