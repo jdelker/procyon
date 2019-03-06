@@ -5,13 +5,13 @@
   <name>Procyon.Expressions</name>
   <groupId>com.github.jdelker</groupId>
   <artifactId>procyon-expressions</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>1.0</version>
   <packaging>jar</packaging>
     
   <parent>
     <groupId>com.github.jdelker</groupId>
     <artifactId>procyon</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
   </parent>
 
   <dependencies>
