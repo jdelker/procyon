@@ -21,7 +21,6 @@ import com.strobel.assembler.metadata.TypeDefinition;
 import com.strobel.decompiler.DecompilerContext;
 import com.strobel.decompiler.languages.java.ast.*;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -40,7 +39,6 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
   @Override
   public Void visitTypeDeclaration(final TypeDeclaration node, final Void data) {
     TypeDefinition definition = node.getUserData(Keys.TYPE_DEFINITION);
-    List<FieldDefinition> fieldList = definition.getDeclaredFields();
 
     final Map<String, FieldDeclaration> oldValueFields = _valueFields;
     final Map<String, ObjectCreationExpression> oldValueInitializers = _valueInitializers;
@@ -92,14 +90,27 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
             AssignmentOperatorType aot = assingExp.getOperator();
             Expression rightExp = assingExp.getRight();
 
-            if (leftExp instanceof IdentifierExpression
-                    && aot.equals(AssignmentOperatorType.ASSIGN)) {
-              String fieldName = ((IdentifierExpression) leftExp).getIdentifier();
-              if (_valueFields.containsKey(fieldName)) {
-                FieldDeclaration fd = _valueFields.get(fieldName);
-                fd.getVariables().firstOrNullObject().setInitializer(rightExp.clone());
-                child.remove();
+            if (aot.equals(AssignmentOperatorType.ASSIGN)) {
+              if (leftExp instanceof IdentifierExpression) {
+                String fieldName = ((IdentifierExpression) leftExp).getIdentifier();
+                if (_valueFields.containsKey(fieldName)) {
+                  moveAssignmentToField(fieldName, rightExp.clone());
+                  child.remove();
+                }
+              } else if (leftExp instanceof MemberReferenceExpression) {
+                String fieldName = ((MemberReferenceExpression) leftExp).getMemberName();
+                String target = ((MemberReferenceExpression) leftExp).getTarget().getText();
+                AstNode parent = node.getParent();
+                if (parent instanceof TypeDeclaration
+                        && ((TypeDeclaration) parent).getName().equals(target)
+                        && _valueFields.containsKey(fieldName)) {
+                  moveAssignmentToField(fieldName, rightExp.clone());
+                  child.remove();
+                }
+              } else {
+                LOG.log(Level.WARNING, "found unqualified Assignment: {0}", leftExp.getText());
               }
+
             } else {
               LOG.log(Level.WARNING, "found unqualified AssignmentExpression in clinit: {0}", exp.getText());
             }
@@ -114,6 +125,12 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
     }
 
     return super.visitMethodDeclaration(node, data);
+  }
+
+  private void moveAssignmentToField(String fieldName, Expression exp) {
+    FieldDeclaration fd = _valueFields.get(fieldName);
+    fd.getVariables().firstOrNullObject().setInitializer(exp);
+    super.visitFieldDeclaration(fd, null);
   }
 
 }

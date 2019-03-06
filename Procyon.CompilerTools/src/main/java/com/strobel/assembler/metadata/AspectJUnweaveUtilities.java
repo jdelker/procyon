@@ -25,6 +25,10 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Class file pre-processor to remove some AspectJ stuff that gets in the way
+ * for proper element sorting.
+ */
 public class AspectJUnweaveUtilities {
 
     private final static Logger LOG = Logger.getLogger(AspectJUnweaveUtilities.class.getSimpleName());
@@ -61,9 +65,8 @@ public class AspectJUnweaveUtilities {
                 MethodDefinition md = it.next();
                 String methodName = md.getName();
 
-                // remove aspectj init
-                if ("<clinit>".equals(methodName)
-                        || methodName.startsWith(ASPECTJ_PREFIX)) {
+                // remove aspectj methods
+                if (methodName.startsWith(ASPECTJ_PREFIX)) {
                     LOG.log(Level.FINE, "removing method: {0}", md.getName());
                     it.remove();
                 }

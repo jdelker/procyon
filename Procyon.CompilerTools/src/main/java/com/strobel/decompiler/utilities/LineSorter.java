@@ -81,7 +81,7 @@ public class LineSorter {
         for (final MethodDefinition method : def.getDeclaredMethods()) {
             final int firstLineNumber = findLineNumber(method);
 
-            if (firstLineNumber < minLineNumber) {
+            if (firstLineNumber > 1 && firstLineNumber < minLineNumber) {
                 minLineNumber = firstLineNumber;
             }
         }

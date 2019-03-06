@@ -162,6 +162,16 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
     return super.visitImportDeclaration(node, data);
   }
 
+//  @Override
+//  public Void visitCastExpression(final CastExpression node, final Void data) {
+//    if (_ajcReturnVariable != null) {
+//      // remove Cast
+//      node.replaceWith(node.getExpression());
+//      return super.visitExpressionStatement(node.getExpression(), data);
+//    }
+//    return super.visitCastExpression(node, data);
+//  }
+  
   /* ==================================================================== */
   private void handleReturn(ExpressionStatement node) {
     Expression exp = node.getExpression();
