@@ -120,7 +120,7 @@ public class CommandLineOptions {
     private String _jarFile;
 
     @Parameter(
-	       names = { "-ln", "--with-line-numbers" },
+	names = { "-ln", "--with-line-numbers" },
         description = "Include line numbers in raw bytecode mode; supports Java mode with -o only.")
     private boolean _includeLineNumbers;
 
@@ -186,6 +186,11 @@ public class CommandLineOptions {
         description = "Do not display the 'Decompiled by Procyon' banner in output.",
         hidden = true)
     private boolean _suppressBanner;
+
+    @Parameter(
+        names = { "-ra", "--remove-aspectj" },
+        description = "Remove AspectJ artefacts that were weaved into the bytecode.")
+    private boolean _removeAspectj;
 
     public final List<String> getInputs() {
         return _inputs;
@@ -414,4 +419,14 @@ public class CommandLineOptions {
     public final void setSuppressBanner(final boolean suppressBanner) {
         _suppressBanner = suppressBanner;
     }
+
+    public boolean getRemoveAspectj() {
+        return _removeAspectj;
+    }
+   
+    public void setRemoveAspectj(final boolean removeAspectj) {
+        _removeAspectj = removeAspectj;
+    }
+
+    
 }
