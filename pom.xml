@@ -27,4 +27,18 @@
     <module>Procyon.Decompiler</module>
   </modules>
     
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>com.amashchenko.maven.plugin</groupId>
+        <artifactId>gitflow-maven-plugin</artifactId>
+        <version>1.11.0</version>
+        <configuration>
+          <allowSnapshots>false</allowSnapshots>
+          <useSnapshotInRelease>true</useSnapshotInRelease>
+          <useSnapshotInHotfix>true</useSnapshotInHotfix>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>
