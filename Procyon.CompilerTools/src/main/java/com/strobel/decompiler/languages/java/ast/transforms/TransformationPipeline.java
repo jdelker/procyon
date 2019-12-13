@@ -70,7 +70,7 @@ public final class TransformationPipeline {
             new RemoveHiddenMembersTransform(context),
             new CollapseImportsTransform(context),
             new RemoveAspectjWeaveTransform(context),
-            new RemoveRedundantBlocksTransform(context),
+            new CleanupTransform(context),
             new AssimilateStaticFieldsTransform(context)
         };
     }

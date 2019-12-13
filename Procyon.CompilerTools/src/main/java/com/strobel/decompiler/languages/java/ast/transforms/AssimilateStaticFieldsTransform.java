@@ -94,7 +94,8 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
               if (leftExp instanceof IdentifierExpression) {
                 String fieldName = ((IdentifierExpression) leftExp).getIdentifier();
                 if (_valueFields.containsKey(fieldName)) {
-                  moveAssignmentToField(fieldName, rightExp.clone());
+                  rightExp.remove();
+                  moveAssignmentToField(fieldName, rightExp);
                   child.remove();
                 }
               } else if (leftExp instanceof MemberReferenceExpression) {
@@ -104,7 +105,8 @@ public class AssimilateStaticFieldsTransform extends ContextTrackingVisitor<Void
                 if (parent instanceof TypeDeclaration
                         && ((TypeDeclaration) parent).getName().equals(target)
                         && _valueFields.containsKey(fieldName)) {
-                  moveAssignmentToField(fieldName, rightExp.clone());
+                  rightExp.remove();
+                  moveAssignmentToField(fieldName, rightExp);
                   child.remove();
                 }
               } else {

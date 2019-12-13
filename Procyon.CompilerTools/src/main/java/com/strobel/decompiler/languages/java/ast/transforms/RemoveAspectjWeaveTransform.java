@@ -27,20 +27,21 @@ import java.util.regex.Pattern;
 public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   private final static Logger LOG = Logger.getLogger(RemoveAspectjWeaveTransform.class.getSimpleName());
-  
-  private final static String PREFIX = ".*ajc\\$";
-  private final static Pattern PATTERN_LOCAL = Pattern.compile(PREFIX+".*\\$localAspectOf.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_PRECLINIT = Pattern.compile(PREFIX+"preClinit.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_ENTRY = Pattern.compile(PREFIX+".*trace\\w*Entry\\(.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_EXIT = Pattern.compile(PREFIX+".*trace\\w*Exit\\(.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_INITLOG = Pattern.compile(PREFIX+".*initLogger.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_TJP = Pattern.compile(PREFIX+"tjp_\\d+ = .*", Pattern.DOTALL);
-  private final static Pattern PATTERN_CREATE = Pattern.compile(PREFIX+".*createAspectInstance.*", Pattern.DOTALL);
-  private final static Pattern PATTERN_GENERAL = Pattern.compile(PREFIX+".*", Pattern.DOTALL);
+
+  private final static String PREFIX = "^ajc\\$";
+  private final static String PREFIX_LOCAL = PREFIX + "[^$]*\\$localAspectOf\\(\\)";
+  private final static Pattern PATTERN_GENERAL = Pattern.compile(PREFIX + ".*", Pattern.DOTALL);
+  private final static Pattern PATTERN_PRECLINIT = Pattern.compile(PREFIX + "preClinit.*", Pattern.DOTALL);
+  private final static Pattern PATTERN_ENTRY = Pattern.compile(PREFIX_LOCAL + "\\.trace\\w+Entry\\(.*", Pattern.DOTALL);
+  private final static Pattern PATTERN_EXIT = Pattern.compile(PREFIX_LOCAL + "\\.trace\\w+Exit\\(.*", Pattern.DOTALL);
+  private final static Pattern PATTERN_THROW = Pattern.compile(PREFIX_LOCAL + "\\.trace\\w+Throw\\(.*", Pattern.DOTALL);
+  private final static Pattern PATTERN_INITLOG = Pattern.compile(PREFIX_LOCAL + "\\.initLogger\\(.*", Pattern.DOTALL);
+  private final static Pattern PATTERN_TJP = Pattern.compile(PREFIX + "tjp_\\d+ = .*", Pattern.DOTALL);
+  private final static Pattern PATTERN_CREATE = Pattern.compile(".*TracingAspect.ajc\\$createAspectInstance.*\n");
   private final static Pattern PATTERN_JOINPOINT = Pattern.compile("final JoinPoint jp =.*", Pattern.DOTALL);
-  
+
   private final boolean _removeAspectj;
-  
+
   private String _ajcReturnVariable = null;
 
   public RemoveAspectjWeaveTransform(final DecompilerContext context) {
@@ -51,7 +52,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   @Override
   public Void visitFieldDeclaration(final FieldDeclaration node, final Void data) {
     final FieldDefinition field = node.getUserData(Keys.FIELD_DEFINITION);
-    if (_removeAspectj 
+    if (_removeAspectj
             && PATTERN_GENERAL.matcher(field.getName()).matches()) {
       node.remove();
       return null;
@@ -61,7 +62,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   @Override
   public Void visitVariableDeclaration(final VariableDeclarationStatement node, final Void p) {
-    if (_removeAspectj 
+    if (_removeAspectj
             && PATTERN_JOINPOINT.matcher(node.getText()).matches()) {
       node.remove();
       return null;
@@ -93,7 +94,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
                 || PATTERN_INITLOG.matcher(text).matches()
                 || PATTERN_TJP.matcher(text).matches()
                 || PATTERN_CREATE.matcher(text).matches()
-                ) {
+                || PATTERN_THROW.matcher(text).matches()) {
           node.remove();
           return null;
         } else if (PATTERN_EXIT.matcher(text).matches()) {
@@ -115,7 +116,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
       BlockStatement tryBlock = node.getTryBlock();
       AstNode firstChild = tryBlock.getFirstChild();
 
-      if (PATTERN_LOCAL.matcher(firstChild.getText()).matches()) {
+      if (PATTERN_ENTRY.matcher(firstChild.getText()).matches()) {
         node.replaceWith(tryBlock);
         return super.visitBlockStatement(tryBlock, data);
       }
@@ -127,8 +128,8 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   public Void visitBlockStatement(final BlockStatement node, final Void data) {
     // look for clinit
     AstNode first = node.getFirstChild();
-    if (_removeAspectj 
-            && first instanceof ExpressionStatement 
+    if (_removeAspectj
+            && first instanceof ExpressionStatement
             && PATTERN_PRECLINIT.matcher(first.getText()).matches()) {
       handleClinitBlock(node);
     }
@@ -171,8 +172,12 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 //    }
 //    return super.visitCastExpression(node, data);
 //  }
-  
   /* ==================================================================== */
+  
+  /**
+   * 
+   * @param node 
+   */
   private void handleReturn(ExpressionStatement node) {
     Expression exp = node.getExpression();
     if (exp != null && exp.hasChildren()) {
@@ -294,6 +299,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   }
 
   private void handleAssignmentReturn(ExpressionStatement node, AssignmentExpression assignExp) {
+    super.visitAssignmentExpression(assignExp, null);
     transformReturn(node, assignExp);
   }
 
@@ -338,7 +344,8 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
     nextNode.remove();
 
     // build new ReturnStatement node for replacement
-    AstNode newNode = new ReturnStatement(conditionalExp.clone());
+    conditionalExp.remove();
+    AstNode newNode = new ReturnStatement(conditionalExp);
 
     // process childNodes in context of _ajcReturnVariable
     _ajcReturnVariable = varName;
@@ -364,7 +371,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
   /*
    * Transform the code for a given AssignmentExpression
    * - remove preceeding VariableDeclaration
-   * - remove succeding ReturnStatement
+   * - remove succeeding ReturnStatement
    * - transform AssignmentExpression into ReturnStatement
    */
   private void transformReturn(ExpressionStatement node, AssignmentExpression assignExp) {
@@ -382,32 +389,40 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
       if (vi == null) {
         throw new MethodBodyParseException("expected to find '" + varName + "' in VariableDeclaration: " + prevNode.getText());
       }
-      prevNode.remove();
+
+      if (vi.getInitializer() != Expression.NULL) {
+        throw new MethodBodyParseException("unexpected initializer for VariableInitializer " + vi);
+      } 
+      
+      // check that nextNode is a ReturnStatement
+      if (nextNode instanceof ReturnStatement) {
+        Expression returnExp = ((ReturnStatement) nextNode).getExpression();
+        if (returnExp instanceof CastExpression) {
+          // ignore cast
+          returnExp = ((CastExpression) returnExp).getExpression();
+        }
+
+        if (returnExp instanceof IdentifierExpression) {
+          if (!varName.equals(((IdentifierExpression) returnExp).getIdentifier())) {
+            throw new MethodBodyParseException("expected variable '" + varName + "' in ReturnStatement: " + nextNode.getText());
+          }
+        } else {
+          throw new MethodBodyParseException("unexpted return type: " + returnExp.getClass());
+        }
+      } else {
+        throw new MethodBodyParseException("expected to find ReturnStatement for '" + varName + "' after: " + node.getText());
+      }
+      
+      // re-join varaible declaration
+      rightExp.remove();
+      vi.setInitializer(rightExp);
+      super.visitVariableInitializer(vi, null);
+
     } else {
       throw new MethodBodyParseException("expected to find VariableDeclaration for '" + varName + "' before: " + prevNode.getText());
     }
 
-    // check that nextNode is a ReturnStatement
-    if (nextNode instanceof ReturnStatement) {
-      Expression returnExp = ((ReturnStatement) nextNode).getExpression();
-      if (returnExp instanceof CastExpression) {
-        // ignore cast
-        returnExp = ((CastExpression) returnExp).getExpression();
-      }
-
-      if (returnExp instanceof IdentifierExpression) {
-        if (!varName.equals(((IdentifierExpression) returnExp).getIdentifier())) {
-          throw new MethodBodyParseException("expected variable '" + varName + "' in ReturnStatement: " + nextNode.getText());
-        }
-        nextNode.remove();
-      } else {
-        throw new MethodBodyParseException("unexpted return type: " + returnExp.getClass());
-      }
-    } else {
-      throw new MethodBodyParseException("expected to find ReturnStatement for '" + varName + "' after: " + node.getText());
-    }
-
-    node.replaceWith(new ReturnStatement(rightExp.clone()));
+    node.remove();
   }
 
   /*
