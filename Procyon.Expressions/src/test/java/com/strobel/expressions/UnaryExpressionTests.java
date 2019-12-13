@@ -14,12 +14,42 @@
 package com.strobel.expressions;
 
 import com.strobel.reflection.Type;
+import com.strobel.reflection.Types;
+import com.strobel.util.TypeUtils;
 import org.junit.Test;
 
 import static com.strobel.expressions.Expression.*;
 import static org.junit.Assert.*;
 
 public class UnaryExpressionTests extends AbstractExpressionTest {
+    @Test
+    public void testIsTrue() throws Throwable {
+        assertResultEquals(isTrue(constant(false)), false);
+        assertResultEquals(isTrue(constant(true)), true);
+
+        final ConstantExpression boxedNull = constant(null, Types.Boolean);
+        final ConstantExpression boxedTrue = constant(Boolean.TRUE, Types.Boolean);
+        final ConstantExpression boxedFalse = constant(Boolean.FALSE, Types.Boolean);
+
+        assertResultEquals(condition(isNull(boxedNull), defaultValue(Types.Boolean), isTrue(unbox(boxedNull))), null);
+        assertResultEquals(condition(isNull(boxedTrue), defaultValue(Types.Boolean), isTrue(unbox(boxedTrue))), true);
+        assertResultEquals(condition(isNull(boxedFalse), defaultValue(Types.Boolean), isTrue(unbox(boxedFalse))), false);
+    }
+
+    @Test
+    public void testIsFalse() throws Throwable {
+        assertResultEquals(isFalse(constant(false)), true);
+        assertResultEquals(isFalse(constant(true)), false);
+
+        final ConstantExpression boxedNull = constant(null, Types.Boolean);
+        final ConstantExpression boxedTrue = constant(Boolean.TRUE, Types.Boolean);
+        final ConstantExpression boxedFalse = constant(Boolean.FALSE, Types.Boolean);
+
+        assertResultEquals(condition(isNull(boxedNull), defaultValue(Types.Boolean), isFalse(unbox(boxedNull))), null);
+        assertResultEquals(condition(isNull(boxedTrue), defaultValue(Types.Boolean), isFalse(unbox(boxedTrue))), false);
+        assertResultEquals(condition(isNull(boxedFalse), defaultValue(Types.Boolean), isFalse(unbox(boxedFalse))), true);
+    }
+
     @Test
     public void testUnaryPlus() throws Throwable {
         assertResultEquals(unaryPlus(constant((byte) -5)), (byte) -5);
@@ -77,6 +107,32 @@ public class UnaryExpressionTests extends AbstractExpressionTest {
         );
     }
 
+    @Test
+    public void testUnbox() throws Throwable {
+        final Object[] expectedResults = new Object[] { (byte) -5, (short) -5, -5, -5L, -5f, -5d };
+
+        for (final Object expectedResult : expectedResults) {
+            for (final Object sourceValue : expectedResults) {
+                final Type<?> sourceType = TypeUtils.getBoxedTypeOrSelf(Type.getType(sourceValue));
+
+                testUnbox(sourceValue, Types.Object, expectedResult);
+                testUnbox(sourceValue, Types.Number, expectedResult);
+                testUnbox(sourceValue, sourceType, expectedResult);
+                testUnbox(new TestNumber(-5), null, expectedResult);
+            }
+        }
+    }
+
+    private <T, R> void testUnbox(final T value, final Type<?> inputType, final R result) throws Throwable {
+        final Type<?> sourceType = inputType != null ? TypeUtils.getBoxedTypeOrSelf(inputType) : Type.getType(value);
+        final Type<?> targetType = TypeUtils.getUnderlyingPrimitive(Type.getType(result));
+
+        final ParameterExpression p = parameter(sourceType, "p");
+        final LambdaExpression<?> lambda = lambda(unbox(p, targetType), p);
+
+        assertEquals(result, lambda.compileHandle().invoke(value));
+    }
+
     // <editor-fold defaultstate="collapsed" desc="TestNumber Class">
 
     private static final class TestNumber {
@@ -88,6 +144,30 @@ public class UnaryExpressionTests extends AbstractExpressionTest {
         }
 
         public int value() {
+            return _value;
+        }
+
+        public byte byteValue() {
+            return (byte)_value;
+        }
+
+        public short shortValue() {
+            return (short)_value;
+        }
+
+        public int intValue() {
+            return _value;
+        }
+
+        public long longValue() {
+            return _value;
+        }
+
+        public float floatValue() {
+            return _value;
+        }
+
+        public double doubleValue() {
             return _value;
         }
 

@@ -28,7 +28,6 @@ import com.strobel.util.ContractUtils;
 import com.strobel.util.TypeUtils;
 
 import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -38,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * @author Mike Strobel
  */
-@SuppressWarnings({ "unchecked", "PackageVisibleField", "UnusedParameters", "UnusedDeclaration", "ConstantConditions" })
+@SuppressWarnings({ "unchecked", "PackageVisibleField", "UnusedParameters", "UnusedDeclaration", "ConstantConditions", "SameParameterValue" })
 final class LambdaCompiler {
     final static AtomicInteger nextId = new AtomicInteger();
     final static Type<Closure> closureType = Type.of(Closure.class);
@@ -209,7 +208,6 @@ final class LambdaCompiler {
     // See if this lambda has a return label
     // If so, we'll create it now and mark it as allowing the "ret" opcode
     // This allows us to generate better IL
-    @SuppressWarnings("ConstantConditions")
     private void addReturnLabel(final LambdaExpression lambda) {
         Expression expression = lambda.getBody();
 
@@ -326,7 +324,7 @@ final class LambdaCompiler {
                 (MethodInfo) method.get(0)
             );
         }
-        catch (NoSuchMethodException | InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        catch (final ReflectiveOperationException e) {
             throw Error.couldNotCreateDelegate(e);
         }
     }
@@ -768,6 +766,10 @@ final class LambdaCompiler {
         final Expression rValue = node.getRight();
         final MemberInfo member = lValue.getMember();
 
+        if (member.getMemberType() != MemberType.Field) {
+            throw Error.invalidMemberType(member.getMemberType());
+        }
+
         // emit "this", if any
         if (lValue.getTarget() != null) {
             emitExpression(lValue.getTarget());
@@ -790,14 +792,7 @@ final class LambdaCompiler {
             generator.emitStore(temp = getLocal(node.getType()));
         }
 
-        switch (member.getMemberType()) {
-            case Field:
-                generator.putField((FieldInfo) member);
-                break;
-
-            default:
-                throw Error.invalidMemberType(member.getMemberType());
-        }
+        generator.putField((FieldInfo) member);
 
         if (emitAs != CompilationFlags.EmitAsVoidType) {
             generator.emitLoad(temp);
@@ -2002,8 +1997,29 @@ final class LambdaCompiler {
     private void emitConstant(final Object value, final Type<?> type) {
         // Try to emit the constant directly into IL
         if (CodeGenerator.canEmitConstant(value, type)) {
-            generator.emitConstant(value, type);
-            return;
+            final boolean isBoxed = TypeUtils.isAutoUnboxed(type);
+            final boolean isClosureAvailable = canEmitBoundConstants();
+
+            if (!isBoxed || !isClosureAvailable) {
+                generator.emitConstant(value, type);
+
+                //
+                // NOTE: For backward compatibility, allow boxed values to be emitted as constants when
+                //       a closure is not available.  Previously, we allowed, e.g., a Long to be stored
+                //       as a long constant, but we didn't emit any boxing upon loading it.  This caused
+                //       problems when the constant was being used as an Object, e.g., as a method
+                //       invocation target.
+                //
+                //       To prevent code that previously worked from breaking, allow the unboxed value
+                //       to be emitted for a boxed ConstantExpression when no alternative is available,
+                //       but emit the boxing operation immediately afterward to avoid the problem above.
+                //
+                if (isBoxed && value != null) {
+                    generator.emitBox(type);
+                }
+
+                return;
+            }
         }
 
         _boundConstants.emitConstant(this, value, type);
@@ -2584,7 +2600,6 @@ final class LambdaCompiler {
         _labelBlock = new LabelScopeInfo(_labelBlock, type);
     }
 
-    @SuppressWarnings("ConstantConditions")
     private boolean tryPushLabelBlock(final Expression node) {
         ExpressionType nodeType = node.getNodeType();
 
@@ -2997,41 +3012,38 @@ final class LambdaCompiler {
 
     // assumes instance is already on the stack
     private void emitMemberGet(final MemberInfo member) {
-        switch (member.getMemberType()) {
-            case Field:
-                final boolean isConstant;
-                final Object constantValue;
-                final FieldInfo field = (FieldInfo) member;
-                final Type<?> fieldType = field.getFieldType();
-
-                try {
-                    if (field instanceof FieldBuilder) {
-                        final FieldBuilder fb = (FieldBuilder) field;
-
-                        constantValue = fb.getConstantValue();
-                        isConstant = constantValue != null && field.isFinal();
-                    }
-                    else {
-                        isConstant = field.isStatic() &&
-                                     field.isFinal() &&
-                                     (fieldType.isPrimitive() || fieldType.isEnum() || Types.String.isEquivalentTo(fieldType));
-                        constantValue = isConstant ? field.getRawField().get(null) : null;
-                    }
-
-                    if (isConstant) {
-                        emitConstant(constantValue, fieldType);
-                        break;
-                    }
-                }
-                catch (final IllegalAccessException ignored) {
-                }
-
-                generator.getField(field);
-                break;
-
-            default:
-                throw ContractUtils.unreachable();
+        if (member.getMemberType() != MemberType.Field) {
+            throw ContractUtils.unreachable();
         }
+
+        final boolean isConstant;
+        final Object constantValue;
+        final FieldInfo field = (FieldInfo) member;
+        final Type<?> fieldType = field.getFieldType();
+
+        try {
+            if (field instanceof FieldBuilder) {
+                final FieldBuilder fb = (FieldBuilder) field;
+
+                constantValue = fb.getConstantValue();
+                isConstant = constantValue != null && field.isFinal();
+            }
+            else {
+                isConstant = field.isStatic() &&
+                             field.isFinal() &&
+                             (fieldType.isPrimitive() || fieldType.isEnum() || Types.String.isEquivalentTo(fieldType));
+                constantValue = isConstant ? field.getRawField().get(null) : null;
+            }
+
+            if (isConstant) {
+                emitConstant(constantValue, fieldType);
+                return;
+            }
+        }
+        catch (final ReflectiveOperationException ignored) {
+        }
+
+        generator.getField(field);
     }
 
     // </editor-fold>
@@ -3635,7 +3647,14 @@ final class LambdaCompiler {
         // Unboxing leaves the unboxed value on the stack
         emitExpression(node.getOperand());
 
-        generator.emitUnbox(node.getType());
+        final MethodInfo method = ((UnaryExpression) expr).getMethod();
+
+        if (method != null) {
+            generator.call(method);
+        }
+        else {
+            generator.emitUnbox(node.getType());
+        }
     }
 
     // </editor-fold>
@@ -3929,7 +3948,7 @@ final class LambdaCompiler {
             keys,
             new StringSwitchCallback() {
                 @Override
-                public void emitCase(final String key, final Label breakTarget) throws Exception {
+                public void emitCase(final String key, final Label breakTarget) {
                     final Expression body = caseBodies.get(key);
 
                     if (body == null) {
@@ -3949,7 +3968,7 @@ final class LambdaCompiler {
                 }
 
                 @Override
-                public void emitDefault(final Label breakTarget) throws Exception {
+                public void emitDefault(final Label breakTarget) {
                     final Expression defaultBody = node.getDefaultBody();
 
                     if (defaultBody == null) {
@@ -4050,7 +4069,7 @@ final class LambdaCompiler {
             keys,
             new SwitchCallback() {
                 @Override
-                public void emitCase(final int key, final Label breakTarget) throws Exception {
+                public void emitCase(final int key, final Label breakTarget) {
                     final Expression body = caseBodies.get(key);
 
                     if (body == null) {
@@ -4070,7 +4089,7 @@ final class LambdaCompiler {
                 }
 
                 @Override
-                public void emitDefault(final Label breakTarget) throws Exception {
+                public void emitDefault(final Label breakTarget) {
                     final Expression defaultBody = node.getDefaultBody();
 
                     if (defaultBody == null) {
