@@ -1,3 +1,0 @@
-<component name="DependencyValidationManager">
-  <scope name="Procyon.CompilerTools" pattern="src[Procyon.CompilerTools]:*..*&amp;&amp;!test:*..*&amp;&amp;!src[Procyon.CompilerTools]:com.strobel.assembler.metadata.signatures.*" />
-</component>
