@@ -28,7 +28,7 @@ public class RemoveAspectjWeaveTransform extends ContextTrackingVisitor<Void> {
 
   private final static Logger LOG = Logger.getLogger(RemoveAspectjWeaveTransform.class.getSimpleName());
 
-  private final static String PREFIX = "^ajc\\$";
+  private final static String PREFIX = "^\\p{Graph}*ajc\\$";
   private final static String PREFIX_LOCAL = PREFIX + "[^$]*\\$localAspectOf\\(\\)";
   private final static Pattern PATTERN_GENERAL = Pattern.compile(PREFIX + ".*", Pattern.DOTALL);
   private final static Pattern PATTERN_PRECLINIT = Pattern.compile(PREFIX + "preClinit.*", Pattern.DOTALL);
