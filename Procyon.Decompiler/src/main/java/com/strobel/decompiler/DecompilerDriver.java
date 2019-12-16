@@ -100,7 +100,7 @@ public class DecompilerDriver {
         settings.setTypeLoader(new InputTypeLoader());
 
         if (!options.getSuppressBanner()) {
-            settings.setOutputFileHeaderText("\nDecompiled by Procyon v" + Procyon.version() + "\n");
+            settings.setOutputFileHeaderText("Decompiled by Procyon v" + Procyon.version());
         }
 
         if (options.isRawBytecode()) {
